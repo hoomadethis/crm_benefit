@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MMIC CRM 반응도 분석</title>
+<style>
+  :root {
+    --bg:#0f0f0f; --surface:#1a1a1a; --surface2:#222; --border:#2e2e2e;
+    --accent:#c8a96e; --accent2:#7eb8a4; --accent3:#c86e6e;
+    --text:#e8e4de; --text2:#999; --text3:#555;
+    --font:'Apple SD Gothic Neo','Noto Sans KR',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;line-height:1.6;}
+
+  .header{padding:24px 32px 18px;border-bottom:1px solid var(--border);display:flex;align-items:baseline;gap:16px;}
+  .header h1{font-size:18px;font-weight:700;letter-spacing:-0.3px;}
+  .header .sub{font-size:12px;color:var(--text3);}
+  .badge{margin-left:auto;font-size:11px;color:var(--accent);border:1px solid var(--accent);border-radius:3px;padding:2px 8px;}
+
+  .controls{padding:14px 32px;display:flex;gap:12px;align-items:center;border-bottom:1px solid var(--border);flex-wrap:wrap;}
+  .controls label{font-size:11px;color:var(--text2);margin-right:4px;}
+  .controls select,.controls input[type=date]{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:4px;font-size:12px;font-family:var(--font);}
+  .btn{background:var(--accent);color:#000;border:none;padding:6px 16px;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);}
+  .btn:hover{opacity:.85;}
+  .btn-ghost{background:var(--surface2);color:var(--accent);border:1px solid var(--accent);}
+  .status{font-size:11px;color:var(--text3);}
+
+  #debug-panel{display:none;background:#0a0a0a;border:1px solid #2a2a2a;margin:0 32px 10px;padding:14px;font-size:11px;line-height:1.9;color:#888;border-radius:4px;word-break:break-all;}
+  #debug-panel b{color:var(--accent);}
+
+  .summary{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--border);}
+  .card{background:var(--surface);padding:16px 20px;}
+  .card .lbl{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;}
+  .card .val{font-size:22px;font-weight:700;}
+  .card .val.gold{color:var(--accent);}
+  .card .val.green{color:var(--accent2);}
+  .card .val.red{color:var(--accent3);}
+  .card .delta{font-size:10px;color:var(--text3);margin-top:2px;}
+
+  .section-gap{height:1px;background:var(--border);}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);}
+  .panel{background:var(--surface);padding:20px 24px;}
+  .panel.full{grid-column:1/-1;}
+  .ptitle{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:14px;padding-bottom:9px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
+  .ptitle span{color:var(--accent2);font-size:10px;}
+
+  canvas{width:100%!important;display:block;}
+
+  .funnel{display:flex;flex-direction:column;gap:7px;}
+  .frow{display:flex;align-items:center;gap:10px;}
+  .flabel{width:90px;font-size:11px;color:var(--text2);text-align:right;flex-shrink:0;}
+  .fbar-wrap{flex:1;background:var(--surface2);border-radius:2px;height:26px;overflow:hidden;}
+  .fbar{height:100%;display:flex;align-items:center;padding-left:8px;font-size:11px;font-weight:600;transition:width .6s ease;}
+  .fnum{width:65px;font-size:12px;font-weight:700;text-align:right;flex-shrink:0;}
+  .fpct{width:42px;font-size:10px;color:var(--text3);text-align:right;flex-shrink:0;}
+
+  .noise-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #1a1a1a;}
+  .noise-id{width:120px;font-size:11px;color:var(--text2);flex-shrink:0;overflow:hidden;text-overflow:ellipsis;}
+  .noise-bw{flex:1;background:var(--surface2);border-radius:2px;height:16px;}
+  .noise-b{height:100%;border-radius:2px;background:var(--accent3);opacity:.7;}
+  .noise-cnt{width:30px;font-size:11px;font-weight:700;color:var(--accent3);text-align:right;}
+  .noise-tag{width:55px;text-align:right;}
+
+  .period-btns{display:flex;gap:1px;}
+  .pb{background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:4px 11px;font-size:11px;cursor:pointer;font-family:var(--font);}
+  .pb.on{background:var(--accent);color:#000;font-weight:700;border-color:var(--accent);}
+  .pb:first-child{border-radius:3px 0 0 3px;}
+  .pb:last-child{border-radius:0 3px 3px 0;}
+
+  .tbl-wrap{overflow:auto;max-height:400px;}
+  table{width:100%;border-collapse:collapse;font-size:11px;}
+  thead th{background:var(--surface2);color:var(--text2);font-weight:600;padding:7px 9px;text-align:left;position:sticky;top:0;z-index:1;white-space:nowrap;border-bottom:1px solid var(--border);}
+  tbody tr{border-bottom:1px solid #1c1c1c;}
+  tbody tr:hover{background:var(--surface2);}
+  tbody td{padding:6px 9px;white-space:nowrap;}
+  .tag{display:inline-block;padding:2px 6px;border-radius:3px;font-size:10px;font-weight:600;}
+  .tk{background:#3a3010;color:#c8a030;}
+  .ts{background:#0d2a20;color:#4db897;}
+  .tn{background:#1e1e1e;color:#555;}
+  .tv{background:#1a2030;color:#6ea8c8;}
+  .tc{background:#1a1a30;color:#8e7ec8;}
+  .to{background:#0d2a10;color:#6ec87e;}
+  .tx{background:#2a0d0d;color:#c86e6e;}
+
+  #loading{position:fixed;inset:0;background:rgba(0,0,0,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;gap:14px;}
+  .spinner{width:34px;height:34px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .lt{color:var(--text2);font-size:13px;}
+  .ls{color:var(--text3);font-size:11px;}
+  #loading.hidden{display:none;}
+
+  ::-webkit-scrollbar{width:4px;height:4px;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <div class="lt">데이터 로딩 중...</div>
+  <div class="ls" id="lstep">시트 연결 중</div>
+</div>
+
+<div class="header">
+  <h1>MMIC CRM 반응도 분석</h1>
+  <div class="sub">OFFSITE 발송 고객 반응 추적 · 알림톡 / SMS</div>
+  <div class="badge" id="last-updated">-</div>
+</div>
+
+<div class="controls">
+  <div>
+    <label>분석 기간</label>
+    <div class="period-btns">
+      <button class="pb" onclick="setPeriod(7,this)">1주</button>
+      <button class="pb on" onclick="setPeriod(30,this)">1개월</button>
+      <button class="pb" onclick="setPeriod(90,this)">3개월</button>
+      <button class="pb" onclick="setPeriod(0,this)">전체</button>
+    </div>
+  </div>
+  <div>
+    <label>직접 기간</label>
+    <input type="date" id="date-from">
+    <span style="color:var(--text3);padding:0 4px">~</span>
+    <input type="date" id="date-to">
+  </div>
+  <button class="btn" onclick="applyFilter()">필터 적용</button>
+  <button class="btn btn-ghost" onclick="showDebug()">🔍 데이터 확인</button>
+  <span class="status" id="smsg"></span>
+</div>
+
+<div id="debug-panel"></div>
+
+<div class="summary">
+  <div class="card"><div class="lbl">전체 고객</div><div class="val" id="s0">-</div><div class="delta">직원 제외</div></div>
+  <div class="card"><div class="lbl">발송 대상</div><div class="val gold" id="s1">-</div><div class="delta">기간 내</div></div>
+  <div class="card"><div class="lbl">반응 고객</div><div class="val green" id="s2">-</div><div class="delta">방문·장바구니·주문</div></div>
+  <div class="card"><div class="lbl">반응률</div><div class="val green" id="s3">-</div><div class="delta">발송 대비</div></div>
+  <div class="card"><div class="lbl">주문 전환</div><div class="val gold" id="s4">-</div><div class="delta">발송 후 주문</div></div>
+  <div class="card"><div class="lbl">노이즈 위험</div><div class="val red" id="s5">-</div><div class="delta">월 3회+ 무반응</div></div>
+</div>
+
+<div class="section-gap"></div>
+
+<div class="grid2">
+  <div class="panel">
+    <div class="ptitle">발송 후 반응 퍼널 <span>방문 → 장바구니 → 주문</span></div>
+    <div class="funnel" id="funnel"></div>
+  </div>
+  <div class="panel">
+    <div class="ptitle">채널별 반응률 비교 <span>알림톡 vs SMS</span></div>
+    <canvas id="ch-chart" height="200"></canvas>
+  </div>
+</div>
+
+<div class="section-gap"></div>
+
+<div class="grid2">
+  <div class="panel">
+    <div class="ptitle">주간 발송 트렌드 <span>알림톡 + SMS</span></div>
+    <canvas id="wk-chart" height="200"></canvas>
+  </div>
+  <div class="panel">
+    <div class="ptitle">노이즈 위험 고객 TOP20 <span>월 3회+ · 무반응</span></div>
+    <div id="noise-list"></div>
+  </div>
+</div>
+
+<div class="section-gap"></div>
+
+<div class="grid2">
+  <div class="panel full">
+    <div class="ptitle">고객별 CRM 반응 현황 <span id="tbl-label">전체</span></div>
+    <div style="display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap;">
+      <button class="pb on" onclick="flist('all',this)">전체</button>
+      <button class="pb" onclick="flist('kakao',this)">알림톡만</button>
+      <button class="pb" onclick="flist('sms',this)">SMS만</button>
+      <button class="pb" onclick="flist('both',this)">중복발송</button>
+      <button class="pb" onclick="flist('react',this)">반응있음</button>
+      <button class="pb" onclick="flist('noreact',this)">반응없음</button>
+      <button class="pb" onclick="flist('order',this)">주문전환</button>
+      <button class="pb" onclick="flist('noise',this)">노이즈위험</button>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>회원ID</th><th>이름</th><th>채널</th>
+            <th>발송횟수</th><th>주간평균</th><th>월발송</th>
+            <th>최근발송일</th><th>반응</th>
+            <th>최종접속일</th><th>장바구니</th><th>주문일시</th><th>주문금액</th><th>노이즈</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div style="margin-top:8px;font-size:11px;color:var(--text3)" id="tbl-cnt"></div>
+  </div>
+</div>
+
+<script>
+const SID = '1UPEWqUhXR8cAiVXmKRmu0v19CuKSfKdpUr_YTOyoqyc';
+const SHEETS = [
+  { key:'customers', gid:463195080,  name:'전체고객' },
+  { key:'orders',    gid:206102215,  name:'주문고객' },
+  { key:'sendLog',   gid:479527448,  name:'알림톡로그' },
+  { key:'lmsSend',   gid:1610136160, name:'SMS발송' },
+  { key:'cart',      gid:1781705300, name:'장바구니' },
+  { key:'whitelist', gid:1932594928, name:'직원제외' },
+];
+
+let RAW = { customers:[], orders:[], sendLog:[], lmsSend:[], cart:[], whitelist:[] };
+let merged = [];
+let periodDays = 30;
+let listFilter = 'all';
+
+// ── CSV 파서 ────────────────────────────────────────────
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  if (lines.length < 2) return [];
+  const headers = splitCSVLine(lines[0]);
+  return lines.slice(1).map(line => {
+    const vals = splitCSVLine(line);
+    const obj = {};
+    headers.forEach((h, i) => { obj[h.trim()] = (vals[i] || '').trim(); });
+    return obj;
+  }).filter(r => Object.values(r).some(v => v !== ''));
+}
+
+function splitCSVLine(line) {
+  const result = [];
+  let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQ && line[i+1] === '"') { cur += '"'; i++; }
+      else inQ = !inQ;
+    } else if (ch === ',' && !inQ) {
+      result.push(cur); cur = '';
+    } else cur += ch;
+  }
+  result.push(cur);
+  return result;
+}
+
+// ── 시트 로드 (CSV) ─────────────────────────────────────
+async function loadSheet(gid, name) {
+  document.getElementById('lstep').textContent = `${name} 로딩 중...`;
+  const url = `https://docs.google.com/spreadsheets/d/${SID}/export?format=csv&gid=${gid}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    // 로그인 페이지 걸리면 HTML 반환됨
+    if (text.trim().startsWith('<!')) throw new Error('로그인 필요 (시트 공유 설정 확인)');
+    return parseCSV(text);
+  } catch(e) {
+    console.error(name, e);
+    return [];
+  }
+}
+
+async function loadAll() {
+  document.getElementById('loading').classList.remove('hidden');
+  for (const s of SHEETS) {
+    RAW[s.key] = await loadSheet(s.gid, s.name);
+  }
+  document.getElementById('loading').classList.add('hidden');
+  document.getElementById('last-updated').textContent = '업데이트 ' + new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+  processAndRender();
+}
+
+// ── 유틸 ────────────────────────────────────────────────
+function pd(s) {
+  if (!s) return null;
+  const str = String(s).replace(/\./g,'-').replace(/\//g,'-').trim();
+  const d = new Date(str);
+  return isNaN(d) ? null : d;
+}
+function fd(d) { return d ? d.toLocaleDateString('ko-KR',{year:'2-digit',month:'2-digit',day:'2-digit'}) : '-'; }
+function fn(n) { return n ? Number(n).toLocaleString('ko-KR') : '-'; }
+function norm(s) { return String(s||'').replace(/[-\s]/g,'').trim(); }
+
+function getCutoff() {
+  const toV = document.getElementById('date-to').value;
+  const frV = document.getElementById('date-from').value;
+  const to = toV ? new Date(toV) : new Date(); to.setHours(23,59,59,999);
+  const from = frV ? new Date(frV) : (periodDays > 0 ? new Date(to.getTime() - periodDays*86400000) : new Date('2020-01-01'));
+  return { from, to };
+}
+
+// ── 처리 ────────────────────────────────────────────────
+function processAndRender() {
+  const { from, to } = getCutoff();
+
+  // 직원 ID 세트
+  const staff = new Set(RAW.whitelist.map(r => norm(r['아이디']||r['ID']||'')).filter(Boolean));
+
+  // 고객 맵
+  const custMap = {};
+  RAW.customers.forEach(r => {
+    const id = norm(r['아이디']||'');
+    if (id && !staff.has(id)) custMap[id] = r;
+  });
+
+  // 전화번호 → ID 맵
+  const ph2id = {};
+  RAW.customers.forEach(r => {
+    const id = norm(r['아이디']||'');
+    const ph = norm(r['휴대폰번호']||'');
+    if (ph && id && !staff.has(id)) ph2id[ph] = id;
+  });
+
+  // 알림톡 발송 (기간 필터)
+  const kakaoMap = {}; // id → sends[]
+  RAW.sendLog.forEach(r => {
+    const dt = pd(r['발송일시']);
+    if (!dt || dt < from || dt > to) return;
+    const id = norm(r['회원 ID']||'');
+    if (!id || staff.has(id)) return;
+    if (!kakaoMap[id]) kakaoMap[id] = [];
+    kakaoMap[id].push({
+      dt,
+      visitDt: pd(r['최초 방문일시']),
+      orderDt: pd(r['최초 구매일시']),
+      orderAmt: Number(r['총 구매금액']||0)
+    });
+  });
+
+  // SMS 발송 (기간 필터)
+  const smsMap = {}; // id → sends[]
+  RAW.lmsSend.forEach(r => {
+    const dt = pd(r['발송일시']);
+    if (!dt || dt < from || dt > to) return;
+    const ph = norm(r['전화번호']||'');
+    const id = ph2id[ph] || ph;
+    if (!id) return;
+    if (!smsMap[id]) smsMap[id] = [];
+    smsMap[id].push({ dt });
+  });
+
+  // 장바구니 (id → dates[])
+  const cartMap = {};
+  RAW.cart.forEach(r => {
+    const id = norm(r['고객 아이디']||'');
+    const dt = pd(r['장바구니 담은 일자']);
+    if (!id || !dt) return;
+    if (!cartMap[id]) cartMap[id] = [];
+    cartMap[id].push(dt);
+  });
+
+  // 주문 (id → [{dt,amt}])
+  const orderMap = {};
+  RAW.orders.forEach(r => {
+    const id = norm(r['주문자ID']||'');
+    const dt = pd(r['주문일시']);
+    if (!id || !dt) return;
+    if (!orderMap[id]) orderMap[id] = [];
+    orderMap[id].push({ dt, amt: Number(r['총 결제금액']||0) });
+  });
+
+  // 합집합
+  const allIds = new Set([
+    ...Object.keys(custMap),
+    ...Object.keys(kakaoMap),
+    ...Object.keys(smsMap)
+  ]);
+
+  merged = [];
+  allIds.forEach(id => {
+    const cust = custMap[id] || {};
+    const kakao = kakaoMap[id] || [];
+    const sms   = smsMap[id]   || [];
+    const total  = kakao.length + sms.length;
+    const hasK   = kakao.length > 0;
+    const hasS   = sms.length   > 0;
+
+    const allDts = [...kakao.map(s=>s.dt), ...sms.map(s=>s.dt)].filter(Boolean);
+    const lastSend  = allDts.length ? new Date(Math.max(...allDts)) : null;
+    const firstSend = allDts.length ? new Date(Math.min(...allDts)) : null;
+
+    const weeks  = Math.max(1, periodDays / 7);
+    const wkAvg  = total > 0 ? (total / weeks).toFixed(1) : 0;
+    const moEst  = total > 0 ? (total / (periodDays||30) * 30).toFixed(1) : 0;
+
+    // 알림톡 로그의 방문/주문 (SEND_LOG_RAW 직접)
+    const kVisit = kakao.map(s=>s.visitDt).filter(Boolean).sort((a,b)=>b-a)[0] || null;
+    const kOrder = kakao.map(s=>s.orderDt).filter(Boolean).sort((a,b)=>b-a)[0] || null;
+    const kAmt   = kakao.reduce((s,x)=>s+x.orderAmt,0);
+
+    // 최종접속일 (발송 이후)
+    const lastAcc = pd(cust['최종접속일']);
+    const accAfter = lastAcc && firstSend && lastAcc >= firstSend ? lastAcc : null;
+
+    // 장바구니 (발송 이후)
+    const cDts = (cartMap[id]||[]).filter(d=>!firstSend||d>=firstSend).sort((a,b)=>b-a);
+    const cartDt = cDts[0] || null;
+
+    // 주문 (발송 이후)
+    const oItems = (orderMap[id]||[]).filter(o=>!firstSend||o.dt>=firstSend).sort((a,b)=>b-a);
+    const orderDt  = oItems[0]?.dt || kOrder || null;
+    const orderAmt = oItems.reduce((s,o)=>s+o.amt,0) || kAmt;
+
+    const visited = !!(accAfter || kVisit);
+    const carted  = !!cartDt;
+    const ordered = !!orderDt;
+    const isNoise = Number(moEst) >= 3 && !visited && !carted && !ordered;
+
+    merged.push({
+      id, name: cust['이름']||'',
+      channel: hasK && hasS ? 'both' : hasK ? 'kakao' : hasS ? 'sms' : 'none',
+      total, wkAvg, moEst, lastSend, firstSend,
+      visited, carted, ordered,
+      accessDt: accAfter || kVisit,
+      cartDt, orderDt, orderAmt,
+      isNoise, hasSent: total > 0
+    });
+  });
+
+  renderAll();
+}
+
+// ── 렌더 ────────────────────────────────────────────────
+function renderAll() {
+  renderSummary();
+  renderFunnel();
+  setTimeout(()=>{ renderChChannel(); renderChWeekly(); }, 80);
+  renderNoise();
+  renderTable();
+}
+
+function renderSummary() {
+  const sent    = merged.filter(m=>m.hasSent);
+  const reacted = sent.filter(m=>m.visited||m.carted||m.ordered);
+  const ordered = sent.filter(m=>m.ordered);
+  const noise   = merged.filter(m=>m.isNoise);
+  document.getElementById('s0').textContent = merged.length.toLocaleString();
+  document.getElementById('s1').textContent = sent.length.toLocaleString();
+  document.getElementById('s2').textContent = reacted.length.toLocaleString();
+  document.getElementById('s3').textContent = sent.length ? (reacted.length/sent.length*100).toFixed(1)+'%' : '-';
+  document.getElementById('s4').textContent = ordered.length.toLocaleString();
+  document.getElementById('s5').textContent = noise.length.toLocaleString();
+}
+
+function renderFunnel() {
+  const sent = merged.filter(m=>m.hasSent);
+  const N = sent.length || 1;
+  const steps = [
+    { label:'발송 대상', n:sent.length,                              color:'#c8a96e' },
+    { label:'방문',      n:sent.filter(m=>m.visited).length,         color:'#6ea8c8' },
+    { label:'장바구니',  n:sent.filter(m=>m.carted).length,          color:'#8e7ec8' },
+    { label:'주문',      n:sent.filter(m=>m.ordered).length,         color:'#6ec87e' },
+  ];
+  document.getElementById('funnel').innerHTML = steps.map(s=>{
+    const pct = (s.n/N*100).toFixed(1);
+    const w   = Math.max(3, s.n/N*100);
+    return `<div class="frow">
+      <div class="flabel">${s.label}</div>
+      <div class="fbar-wrap"><div class="fbar" style="width:${w}%;background:${s.color}20;border-left:3px solid ${s.color};color:${s.color}">${s.n.toLocaleString()}명</div></div>
+      <div class="fnum" style="color:${s.color}">${s.n.toLocaleString()}</div>
+      <div class="fpct">${pct}%</div>
+    </div>`;
+  }).join('');
+}
+
+// 캔버스 드로어
+function drawCanvas(id, type, labels, datasets) {
+  const cv = document.getElementById(id);
+  if (!cv) return;
+  const dpr = window.devicePixelRatio || 1;
+  const W = cv.parentElement.clientWidth || 400;
+  const H = cv.offsetHeight || 200;
+  cv.width  = W * dpr;
+  cv.height = H * dpr;
+  cv.style.width  = W + 'px';
+  cv.style.height = H + 'px';
+  const ctx = cv.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0,0,W,H);
+
+  const COLORS = ['#c8a96e','#7eb8a4','#c86e6e','#6ea8c8','#8e7ec8'];
+  const pad = {t:24, r:16, b:36, l:44};
+  const cw = W - pad.l - pad.r;
+  const ch = H - pad.t - pad.b;
+  const maxV = Math.max(...datasets.flatMap(d=>d.data), 1);
+
+  // grid
+  ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 1;
+  for (let i=0; i<=4; i++) {
+    const y = pad.t + ch - ch*i/4;
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l+cw, y); ctx.stroke();
+    ctx.fillStyle='#444'; ctx.font='10px Apple SD Gothic Neo,sans-serif'; ctx.textAlign='right';
+    ctx.fillText(type==='bar' ? Math.round(maxV*i/4)+'%' : Math.round(maxV*i/4), pad.l-4, y+3);
+  }
+
+  if (type === 'bar') {
+    const gw = cw / labels.length;
+    const bw = gw / (datasets.length + 1);
+    datasets.forEach((ds, di) => {
+      ds.data.forEach((v, li) => {
+        const x = pad.l + gw*li + bw*di + bw*0.6;
+        const bh = (v/maxV)*ch;
+        ctx.fillStyle = COLORS[di % COLORS.length];
+        ctx.globalAlpha = 0.85;
+        ctx.fillRect(x, pad.t+ch-bh, bw-2, bh);
+        ctx.globalAlpha = 1;
+        if (v > 0) {
+          ctx.fillStyle = COLORS[di%COLORS.length];
+          ctx.font = '9px Apple SD Gothic Neo,sans-serif'; ctx.textAlign='center';
+          ctx.fillText(v+'%', x+bw/2-1, pad.t+ch-bh-3);
+        }
+      });
+    });
+    labels.forEach((lb,i)=>{
+      ctx.fillStyle='#555'; ctx.font='10px Apple SD Gothic Neo,sans-serif'; ctx.textAlign='center';
+      ctx.fillText(lb, pad.l + cw/labels.length*(i+0.5), pad.t+ch+14);
+    });
+  } else {
+    const sx = labels.length > 1 ? cw/(labels.length-1) : cw;
+    datasets.forEach((ds, di) => {
+      const col = COLORS[di % COLORS.length];
+      ctx.strokeStyle = col; ctx.lineWidth = 2;
+      ctx.beginPath();
+      ds.data.forEach((v,i)=>{
+        const x = pad.l + sx*i;
+        const y = pad.t + ch - (v/maxV)*ch;
+        i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+      });
+      ctx.stroke();
+      ds.data.forEach((v,i)=>{
+        ctx.fillStyle=col;
+        ctx.beginPath(); ctx.arc(pad.l+sx*i, pad.t+ch-(v/maxV)*ch, 3,0,Math.PI*2); ctx.fill();
+      });
+    });
+    const step = Math.max(1, Math.floor(labels.length/7));
+    labels.forEach((lb,i)=>{
+      if (i%step!==0) return;
+      ctx.fillStyle='#555'; ctx.font='10px Apple SD Gothic Neo,sans-serif'; ctx.textAlign='center';
+      ctx.fillText(lb, pad.l+sx*i, pad.t+ch+14);
+    });
+  }
+
+  // legend
+  datasets.forEach((ds,di)=>{
+    const col = COLORS[di%COLORS.length];
+    ctx.fillStyle=col; ctx.fillRect(pad.l+di*80, 6, 10, 10);
+    ctx.fillStyle='#777'; ctx.font='10px Apple SD Gothic Neo,sans-serif'; ctx.textAlign='left';
+    ctx.fillText(ds.label, pad.l+di*80+14, 15);
+  });
+}
+
+function renderChChannel() {
+  const sent = merged.filter(m=>m.hasSent);
+  const grp = {
+    '알림톡': sent.filter(m=>m.channel==='kakao'),
+    'SMS':   sent.filter(m=>m.channel==='sms'),
+    '중복':  sent.filter(m=>m.channel==='both'),
+  };
+  const rr = arr => arr.length ? +(arr.filter(m=>m.visited||m.carted||m.ordered).length/arr.length*100).toFixed(1) : 0;
+  const cr = arr => arr.length ? +(arr.filter(m=>m.ordered).length/arr.length*100).toFixed(1) : 0;
+  drawCanvas('ch-chart','bar',
+    Object.keys(grp),
+    [
+      { label:'반응률(%)',   data: Object.values(grp).map(rr) },
+      { label:'주문전환(%)', data: Object.values(grp).map(cr) },
+    ]
+  );
+}
+
+function renderChWeekly() {
+  const { from, to } = getCutoff();
+  const weeks = {};
+  const addW = (dt, ch) => {
+    if (!dt || dt < from || dt > to) return;
+    const m = new Date(dt);
+    m.setHours(0,0,0,0);
+    const day = m.getDay();
+    m.setDate(m.getDate() - (day===0?6:day-1));
+    const key = (m.getMonth()+1)+'/'+(m.getDate());
+    if (!weeks[key]) weeks[key]={k:0,s:0};
+    weeks[key][ch]++;
+  };
+  RAW.sendLog.forEach(r=>addW(pd(r['발송일시']),'k'));
+  RAW.lmsSend.forEach(r=>addW(pd(r['발송일시']),'s'));
+  const labels = Object.keys(weeks).sort((a,b)=>{
+    const [am,ad]=a.split('/').map(Number), [bm,bd]=b.split('/').map(Number);
+    return am!==bm?am-bm:ad-bd;
+  });
+  drawCanvas('wk-chart','line', labels, [
+    { label:'알림톡', data: labels.map(k=>weeks[k].k) },
+    { label:'SMS',   data: labels.map(k=>weeks[k].s) },
+  ]);
+}
+
+function renderNoise() {
+  const noise = merged.filter(m=>m.isNoise).sort((a,b)=>b.moEst-a.moEst).slice(0,20);
+  const el = document.getElementById('noise-list');
+  if (!noise.length) { el.innerHTML='<div style="color:var(--text3);font-size:12px;text-align:center;padding:30px 0">노이즈 위험 고객 없음</div>'; return; }
+  const maxM = Math.max(...noise.map(m=>Number(m.moEst)), 1);
+  el.innerHTML = noise.map(m=>`
+    <div class="noise-row">
+      <div class="noise-id" title="${m.id}">${m.name||m.id}</div>
+      <div class="noise-bw"><div class="noise-b" style="width:${Number(m.moEst)/maxM*100}%"></div></div>
+      <div class="noise-cnt">${m.moEst}</div>
+      <div class="noise-tag"><span class="tag tx">무반응</span></div>
+    </div>`).join('');
+}
+
+function renderTable() {
+  let data = [...merged];
+  if      (listFilter==='kakao')   data = data.filter(m=>m.channel==='kakao');
+  else if (listFilter==='sms')     data = data.filter(m=>m.channel==='sms');
+  else if (listFilter==='both')    data = data.filter(m=>m.channel==='both');
+  else if (listFilter==='react')   data = data.filter(m=>m.hasSent&&(m.visited||m.carted||m.ordered));
+  else if (listFilter==='noreact') data = data.filter(m=>m.hasSent&&!m.visited&&!m.carted&&!m.ordered);
+  else if (listFilter==='order')   data = data.filter(m=>m.ordered);
+  else if (listFilter==='noise')   data = data.filter(m=>m.isNoise);
+
+  data.sort((a,b)=>b.total-a.total);
+
+  document.getElementById('tbody').innerHTML = data.slice(0,500).map(m=>{
+    const chTag = m.channel==='both'  ? '<span class="tag tk">알림톡</span> <span class="tag ts">SMS</span>'
+      : m.channel==='kakao' ? '<span class="tag tk">알림톡</span>'
+      : m.channel==='sms'   ? '<span class="tag ts">SMS</span>'
+      : '<span class="tag tn">미발송</span>';
+    const react = m.ordered ? '<span class="tag to">주문</span>'
+      : m.carted  ? '<span class="tag tc">장바구니</span>'
+      : m.visited ? '<span class="tag tv">방문</span>'
+      : m.hasSent ? '<span class="tag tx">무반응</span>' : '-';
+    const noiseTag = m.isNoise ? '<span class="tag tx">⚠위험</span>' : '';
+    return `<tr>
+      <td style="color:var(--text3);font-size:10px">${m.id}</td>
+      <td>${m.name||'-'}</td>
+      <td>${chTag}</td>
+      <td style="text-align:center;font-weight:700;color:${m.total>=3?'var(--accent3)':'var(--text)'}">${m.total||'-'}</td>
+      <td style="text-align:center">${m.wkAvg||'-'}</td>
+      <td style="text-align:center;color:${Number(m.moEst)>=3?'var(--accent3)':'var(--text)'}">${m.moEst||'-'}</td>
+      <td style="color:var(--text2)">${fd(m.lastSend)}</td>
+      <td>${react}</td>
+      <td style="color:${m.accessDt?'var(--accent2)':'var(--text3)'}">${fd(m.accessDt)}</td>
+      <td style="color:${m.cartDt?'#8e7ec8':'var(--text3)'}">${fd(m.cartDt)}</td>
+      <td style="color:${m.orderDt?'#6ec87e':'var(--text3)'}">${fd(m.orderDt)}</td>
+      <td style="color:${m.orderAmt?'var(--accent)':'var(--text3)'}">${m.orderAmt?fn(m.orderAmt)+'원':'-'}</td>
+      <td>${noiseTag}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('tbl-cnt').textContent = `총 ${data.length.toLocaleString()}명 (최대 500행 표시)`;
+}
+
+// ── 컨트롤 ──────────────────────────────────────────────
+function setPeriod(days, btn) {
+  periodDays = days;
+  document.querySelectorAll('.period-btns .pb').forEach(b=>b.classList.remove('on'));
+  if (btn) btn.classList.add('on');
+  document.getElementById('date-from').value = '';
+  document.getElementById('date-to').value = '';
+  processAndRender();
+}
+function applyFilter() { processAndRender(); }
+function flist(type, btn) {
+  listFilter = type;
+  document.querySelectorAll('.panel.full .pb').forEach(b=>b.classList.remove('on'));
+  if (btn) btn.classList.add('on');
+  renderTable();
+}
+
+function showDebug() {
+  const el = document.getElementById('debug-panel');
+  if (el.style.display==='block') { el.style.display='none'; return; }
+  const lines = Object.entries(RAW).map(([k,rows])=>{
+    if (!rows.length) return `<b>${k}</b>: 0행 ❌`;
+    const cols = Object.keys(rows[0]);
+    const sample = JSON.stringify(rows[0]).slice(0,180);
+    return `<b>${k}</b>: ${rows.length}행 ✅<br><span style="color:#666">컬럼: ${cols.join(' | ')}</span><br><span style="color:#444;font-size:10px">${sample}</span>`;
+  });
+  el.innerHTML = '<b>📋 실제 로딩 결과</b><br><br>' + lines.join('<br><br>');
+  el.style.display = 'block';
+}
+
+// ── 초기화 ──────────────────────────────────────────────
+const today = new Date();
+const ago30 = new Date(today); ago30.setDate(today.getDate()-30);
+document.getElementById('date-to').value   = today.toISOString().split('T')[0];
+document.getElementById('date-from').value = ago30.toISOString().split('T')[0];
+
+window.addEventListener('load', loadAll);
+window.addEventListener('resize', ()=>{ setTimeout(()=>{ renderChChannel(); renderChWeekly(); }, 50); });
+</script>
+</body>
+</html>
